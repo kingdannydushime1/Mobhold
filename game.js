@@ -1262,9 +1262,9 @@ function generateLevelConfig(levelNum) {
     const waveMod = difficultyWave(levelNum, 0.15, 0.4, 1.0);
     const difficulty = Math.max(0.6, baseDiff * waveMod);
 
-    // === KILL COUNT (linear: level 1→18, level 5→21, level 45→43, level 100→73) ===
-    const killBase = Math.floor(18 + levelNum * 0.55);
-    const killTarget = Math.max(8, Math.floor(killBase * (0.9 + difficulty * 0.15)));
+    // === KILL COUNT (level 1→12, level 50→34, level 100→57, level 150→79) ===
+    const killBase = Math.floor(12 + levelNum * 0.45);
+    const killTarget = Math.max(10, Math.floor(killBase * (0.9 + difficulty * 0.15)));
 
     // === ENEMY COUNT (how many spawn per level session) ===
     const enemyCount = Math.floor(8 + levelNum * 0.8 * difficulty);
@@ -1311,20 +1311,20 @@ function generateLevelConfig(levelNum) {
             target = killTarget;
             break;
         case 'kill_specific': {
-            target = Math.max(5, Math.floor(killTarget * 0.4));
+            target = Math.max(3, Math.floor(killTarget * 0.3));
             break;
         }
         case 'reach_score':
-            target = Math.max(500, Math.floor(500 + levelNum * 60 * difficulty));
+            target = Math.max(150, Math.floor(100 + killTarget * 12));
             break;
         case 'combo_kill':
-            target = Math.max(3, Math.floor(Math.min(10, 3 + Math.sqrt(levelNum) * 0.5 * difficulty)));
+            target = Math.max(3, Math.floor(Math.min(7, 2 + Math.sqrt(levelNum) * 0.35)));
             break;
         case 'survive_time':
-            target = Math.max(20, Math.floor(25 + levelNum * 0.3));
+            target = Math.max(15, Math.floor(15 + levelNum * 0.2));
             break;
         case 'survive_no_damage':
-            target = Math.max(10, Math.floor(12 + levelNum * 0.12));
+            target = Math.max(8, Math.floor(8 + levelNum * 0.1));
             break;
         case 'boss_kill':
             target = 1;
@@ -1381,6 +1381,7 @@ function startLevel(levelNum) {
     objectiveTarget = levelData.objective.target;
     levelSpecificKills = {};
     levelTimeElapsed = 0;
+    levelScoreStart = score;
     bossKilledThisLevel = false;
 
     // Set biome for this level
@@ -1416,7 +1417,7 @@ function updateLevelObjective(dt) {
             objectiveProgress = levelSpecificKills[levelData.objective.specificType] || 0;
             break;
         case 'reach_score':
-            objectiveProgress = score;
+            objectiveProgress = score - levelScoreStart;
             break;
         case 'combo_kill':
             objectiveProgress = levelMaxCombo;
@@ -1549,6 +1550,7 @@ let objectiveProgress = 0;         // current progress toward objective
 let objectiveTarget = 0;           // target for objective
 let levelSpecificKills = {};       // { enemyType: killCount }
 let levelTimeElapsed = 0;          // seconds elapsed in current level
+let levelScoreStart = 0;           // score at start of level (for reach_score)
 let bossKilledThisLevel = false;   // set to true when boss dies in level
 
 // Player weapons
@@ -4763,7 +4765,7 @@ function getObjectiveText() {
         }
         case 'survive_time': return `Survive ${objectiveProgress}/${obj.target}s`;
         case 'survive_no_damage': return `No hit ${objectiveProgress}/${obj.target}s`;
-        case 'reach_score': return `Score ${objectiveProgress}/${obj.target}`;
+        case 'reach_score': return `Score ${objectiveProgress}/${obj.target} pts`;
         case 'combo_kill': return `Combo ${objectiveProgress}/${obj.target}x`;
         case 'boss_kill': return `Defeat the boss`;
         default: return '';
@@ -6598,6 +6600,7 @@ function restartGame() {
     levelData = null;
     levelSpecificKills = {};
     levelTimeElapsed = 0;
+    levelScoreStart = 0;
     bossKilledThisLevel = false;
 
     // Reset biome system
