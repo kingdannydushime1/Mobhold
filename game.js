@@ -1098,6 +1098,7 @@ function damagePlayer() {
         SFX.gameOver();
         stopMusic();
         gameState = 'gameover';
+        showReviveButton = Math.random() < 0.3;
         levelDeaths[currentLevel] = (levelDeaths[currentLevel] || 0) + 1;
         try { localStorage.setItem('mobholdLevelDeaths', JSON.stringify(levelDeaths)); } catch (e) {}
         if (score > highScore) {
@@ -1317,7 +1318,7 @@ function generateLevelConfig(levelNum) {
             target = Math.max(500, Math.floor(500 + levelNum * 60 * difficulty));
             break;
         case 'combo_kill':
-            target = Math.max(3, Math.floor(Math.min(15, 3 + Math.sqrt(levelNum) * 0.8 * difficulty)));
+            target = Math.max(3, Math.floor(Math.min(10, 3 + Math.sqrt(levelNum) * 0.5 * difficulty)));
             break;
         case 'survive_time':
             target = Math.max(20, Math.floor(25 + levelNum * 0.3));
@@ -1542,6 +1543,7 @@ let levelTransitionTimer = 0;
 let levelStarsEarned = 0;
 let levelHighScores = {};          // { levelId: { score, stars } }
 let levelDeaths = {};              // { levelNum: deathCount }
+let showReviveButton = false;     // 30% chance on game over
 let maxLevelReached = 1;           // highest level unlocked
 let objectiveProgress = 0;         // current progress toward objective
 let objectiveTarget = 0;           // target for objective
@@ -1610,7 +1612,7 @@ const PENTAGRAM_FADE_OUT = 300;  // ms
 // ============================================
 let comboCount = 0;
 let comboTimer = 0;
-const COMBO_WINDOW = 2.0;        // seconds to chain kills
+const COMBO_WINDOW = 3.0;        // seconds to chain kills
 const COMBO_DECAY_RATE = 1.0;    // multiplier lost per second after window
 let comboMultiplier = 1;
 let comboTexts = [];             // { x, y, text, timer, maxTimer, scale, color }
@@ -1865,6 +1867,8 @@ canvas.addEventListener('mousemove', (e) => {
     } else if (gameState === 'gameover') {
         const buttons = getGameOverButtonBounds();
         if (isPointInButton(x, y, buttons.restart)) {
+            isOverButton = true;
+        } else if (buttons.revive && isPointInButton(x, y, buttons.revive)) {
             isOverButton = true;
         } else if (buttons.skip && isPointInButton(x, y, buttons.skip)) {
             isOverButton = true;
@@ -2123,6 +2127,17 @@ function handleInputAt(screenX, screenY) {
             screenY >= buttons.restart.y && screenY <= buttons.restart.y + buttons.restart.height) {
             restartGame();
             startLevel(maxLevelReached);
+            return;
+        }
+
+        // Check revive button
+        if (buttons.revive && screenX >= buttons.revive.x && screenX <= buttons.revive.x + buttons.revive.width &&
+            screenY >= buttons.revive.y && screenY <= buttons.revive.y + buttons.revive.height) {
+            // TODO: show rewarded ad, then on completion:
+            playerLives = 1;
+            gameState = 'playing';
+            startMusic();
+            damageInvincibilityTimer = DAMAGE_INVINCIBILITY;
             return;
         }
 
@@ -3814,10 +3829,11 @@ function getTileAt(tileX, tileY) {
 }
 
 function isPositionBlocked(worldX, worldY) {
-    // Check the tile at the center of the entity
     const tile = worldToTile(worldX, worldY);
-    const tileType = getTileAt(tile.x, tile.y);
-    return tileType.blocking;
+    if (currentBiome) {
+        return getBiomeTileAt(tile.x, tile.y, currentBiome).blocking;
+    }
+    return getTileAt(tile.x, tile.y).blocking;
 }
 
 /// Performance: Viewport culling helper
@@ -4790,24 +4806,20 @@ function getGameOverButtonBounds() {
     const btnHeight = 50;
     const gap = 15;
 
-    const restartY = canvas.height / 2 - 30;
-    const result = {
-        restart: {
-            x: (canvas.width - btnWidth) / 2,
-            y: restartY,
-            width: btnWidth,
-            height: btnHeight
-        }
-    };
+    const result = {};
+    let y = canvas.height / 2 - 30;
+
+    result.restart = { x: (canvas.width - btnWidth) / 2, y, width: btnWidth, height: btnHeight };
+    y += btnHeight + gap;
+
+    if (showReviveButton) {
+        result.revive = { x: (canvas.width - btnWidth) / 2, y, width: btnWidth, height: btnHeight };
+        y += btnHeight + gap;
+    }
 
     const deaths = levelDeaths[currentLevel] || 0;
     if (deaths >= 3) {
-        result.skip = {
-            x: (canvas.width - btnWidth) / 2,
-            y: restartY + btnHeight + gap,
-            width: btnWidth,
-            height: btnHeight
-        };
+        result.skip = { x: (canvas.width - btnWidth) / 2, y, width: btnWidth, height: btnHeight };
     }
 
     return result;
@@ -4846,6 +4858,22 @@ function drawGameOver() {
     ctx.fillStyle = 'white';
     ctx.font = '14px "Press Start 2P", monospace';
     ctx.fillText('RESTART', canvas.width / 2, buttons.restart.y + buttons.restart.height / 2);
+
+    if (buttons.revive) {
+        ctx.fillStyle = '#8a5a2a';
+        ctx.fillRect(buttons.revive.x, buttons.revive.y, buttons.revive.width, buttons.revive.height);
+        ctx.strokeStyle = '#cc8844';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(buttons.revive.x, buttons.revive.y, buttons.revive.width, buttons.revive.height);
+
+        ctx.fillStyle = 'white';
+        ctx.font = '12px "Press Start 2P", monospace';
+        ctx.fillText('REVIVE', canvas.width / 2, buttons.revive.y + buttons.revive.height / 2 - 4);
+
+        ctx.fillStyle = '#ffcc88';
+        ctx.font = '9px "Press Start 2P", monospace';
+        ctx.fillText('\u25B6 WATCH AD', canvas.width / 2, buttons.revive.y + buttons.revive.height / 2 + 14);
+    }
 
     if (buttons.skip) {
         ctx.fillStyle = '#3a5a8a';
@@ -5305,6 +5333,7 @@ function updateEnemies(dt) {
                 SFX.gameOver();
                 stopMusic();
                 gameState = 'gameover';
+                showReviveButton = Math.random() < 0.3;
                 levelDeaths[currentLevel] = (levelDeaths[currentLevel] || 0) + 1;
                 try { localStorage.setItem('mobholdLevelDeaths', JSON.stringify(levelDeaths)); } catch (e) {}
                 // Save high score if current score is higher
