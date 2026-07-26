@@ -166,6 +166,7 @@ const SCROLL_CONFIG = {
 
 // Biome sprite sheet decoration index mapping (row in sprite sheet = index + 1)
 const BIOME_DECO_MAP = {
+    plains: ['wildflower','tall_grass','small_rock','shrub','fence','log','butterfly','mushroom'],
     forest: ['tree_oak','tree_pine','bush_large','fern','flower_wild','mushroom_group','stump_mossy','fallen_log'],
     desert: ['cactus_tall','cactus_saguaro','dune_ripple','skull_buried','dead_bush','rock_sandstone','bone_pile','scorpion_hole'],
     snow: ['pine_snow','pine_small','ice_crystal','snowdrift','frozen_lake','rock_icy','igloo_ruin','wolf_tracks'],
@@ -2270,7 +2271,25 @@ function fbm(x, y, seed, octaves, persistence, scale) {
 
 const BIOMES = [
     {
-        id: 'forest', name: 'Forest',
+        id: 'plains', name: 'Verdant Plains', weight: 3,
+        palette: { deep: '#4a6a2a', ground: '#5a8a30', light: '#72b044', accent: '#88cc55', water: '#3a7ab8', rock: '#8a8a7a' },
+        thresholds: { water: 0.18, ground: 0.42, grass: 0.75, rock: 0.90, high: 1.0 },
+        decorations: [
+            { type: 'wildflower', density: 0.05, blocking: false },
+            { type: 'tall_grass', density: 0.06, blocking: false },
+            { type: 'small_rock', density: 0.02, blocking: false },
+            { type: 'shrub', density: 0.03, blocking: false },
+            { type: 'fence', density: 0.01, blocking: true },
+            { type: 'log', density: 0.008, blocking: true },
+            { type: 'butterfly', density: 0.015, blocking: false },
+            { type: 'mushroom', density: 0.025, blocking: false },
+        ],
+        noise: { octaves: 4, persistence: 0.5, scale: 0.035 },
+        decorNoise: { octaves: 3, persistence: 0.4, scale: 0.06 },
+        particles: { type: 'firefly', count: 10, color: '#ccff44' },
+    },
+    {
+        id: 'forest', name: 'Forest', weight: 1,
         palette: { deep: '#244416', ground: '#3a6e1e', light: '#569430', accent: '#72b044', water: '#2e6a9c', rock: '#6a6a5a', mud: '#4a3a20', moss: '#4a7a2a' },
         thresholds: { water: 0.22, ground: 0.48, grass: 0.72, rock: 0.88, high: 1.0 },
         decorations: [
@@ -2288,7 +2307,7 @@ const BIOMES = [
         particles: { type: 'firefly', count: 18, color: '#ccff44' },
     },
     {
-        id: 'desert', name: 'Scorched Dunes',
+        id: 'desert', name: 'Scorched Dunes', weight: 1,
         palette: { deep: '#a08030', ground: '#c8a848', light: '#e0c870', accent: '#f0dc90', water: '#4a88aa', rock: '#8a6a30', sand: '#d4b858', bone: '#e0d8c0' },
         thresholds: { water: 0.12, ground: 0.42, grass: 0.72, rock: 0.90, high: 1.0 },
         decorations: [
@@ -2306,7 +2325,7 @@ const BIOMES = [
         particles: { type: 'sand', count: 22, color: '#d4b858' },
     },
     {
-        id: 'snow', name: 'Frozen Wastes',
+        id: 'snow', name: 'Frozen Wastes', weight: 1,
         palette: { deep: '#8898b0', ground: '#b8c8e0', light: '#d8e4f0', accent: '#eef4ff', water: '#5890b8', rock: '#7888a0', ice: '#a0c8e8', frost: '#c8dcf0' },
         thresholds: { water: 0.18, ground: 0.45, grass: 0.75, rock: 0.90, high: 1.0 },
         decorations: [
@@ -2324,7 +2343,7 @@ const BIOMES = [
         particles: { type: 'snow', count: 35, color: '#ffffff' },
     },
     {
-        id: 'swamp', name: 'Mire',
+        id: 'swamp', name: 'Mire', weight: 1,
         palette: { deep: '#1e2a10', ground: '#3a4a1e', light: '#4a5a2a', accent: '#5a6a38', water: '#2a4a38', rock: '#4a4a3a', mud: '#3a3018', algae: '#4a6a2a' },
         thresholds: { water: 0.32, ground: 0.55, grass: 0.80, rock: 0.92, high: 1.0 },
         decorations: [
@@ -2342,7 +2361,7 @@ const BIOMES = [
         particles: { type: 'fog', count: 12, color: '#7aaa7a' },
     },
     {
-        id: 'volcanic', name: 'Inferno Peaks',
+        id: 'volcanic', name: 'Inferno Peaks', weight: 1,
         palette: { deep: '#1a0a00', ground: '#3a1a08', light: '#5a2a10', accent: '#8a3a10', water: '#cc3300', rock: '#2a1a0a', ember: '#aa4400', obsidian: '#1a0a08' },
         thresholds: { water: 0.18, ground: 0.45, grass: 0.70, rock: 0.88, high: 1.0 },
         decorations: [
@@ -2360,7 +2379,7 @@ const BIOMES = [
         particles: { type: 'ember', count: 25, color: '#ff6600' },
     },
     {
-        id: 'crystal', name: 'Crystal Cavern',
+        id: 'crystal', name: 'Crystal Cavern', weight: 1,
         palette: { deep: '#1a0a2a', ground: '#3a1a4a', light: '#5a2a6a', accent: '#7a3a8a', water: '#4a2a7a', rock: '#2a1a3a', crystal: '#9a5acc', glow: '#cc88ff' },
         thresholds: { water: 0.12, ground: 0.42, grass: 0.75, rock: 0.90, high: 1.0 },
         decorations: [
@@ -2378,7 +2397,7 @@ const BIOMES = [
         particles: { type: 'sparkle', count: 30, color: '#cc88ff' },
     },
     {
-        id: 'corruption', name: 'Void',
+        id: 'corruption', name: 'Void', weight: 1,
         palette: { deep: '#0a0018', ground: '#1a0830', light: '#2a1048', accent: '#4a1860', water: '#300848', rock: '#120020', vein: '#6a20a0', eye: '#ff0040' },
         thresholds: { water: 0.22, ground: 0.50, grass: 0.78, rock: 0.90, high: 1.0 },
         decorations: [
@@ -2396,7 +2415,7 @@ const BIOMES = [
         particles: { type: 'dark_sparkle', count: 22, color: '#aa44ff' },
     },
     {
-        id: 'celestial', name: 'Ethereal Sky',
+        id: 'celestial', name: 'Ethereal Sky', weight: 1,
         palette: { deep: '#0a1830', ground: '#1a3050', light: '#2a4870', accent: '#3a6090', water: '#204068', rock: '#182848', cloud: '#5080b0', star: '#aaccff' },
         thresholds: { water: 0.18, ground: 0.45, grass: 0.75, rock: 0.90, high: 1.0 },
         decorations: [
@@ -2426,12 +2445,21 @@ let terrainDamageTick = 0;
 function getBiomeForLevel(levelNum) {
     if (levelNum === 1) return null;
     const biomeSeed = levelNum * 7919;
-    const biomeIndex = Math.floor(levelRng(biomeSeed) * BIOMES.length);
-    return BIOMES[biomeIndex];
+    const totalWeight = BIOMES.reduce((s, b) => s + (b.weight || 1), 0);
+    let r = levelRng(biomeSeed) * totalWeight;
+    for (const biome of BIOMES) {
+        r -= (biome.weight || 1);
+        if (r <= 0) return biome;
+    }
+    return BIOMES[BIOMES.length - 1];
 }
 
 function getBiomeTileAt(tileX, tileY, biome) {
     if (!biome) return getTileAt(tileX, tileY);
+    if (biome.id === 'plains') {
+        const classicTile = getTileAt(tileX, tileY);
+        return { type: classicTile.blocking ? 'rock' : 'main', color: classicTile.color || '#5a8a30', blocking: classicTile.blocking, decoration: classicTile.isPlant ? { type: 'tall_grass' } : null };
+    }
     const key = `b${biome.id}_${tileX},${tileY}`;
     if (tileMap.has(key)) return tileMap.get(key);
 
@@ -3792,7 +3820,7 @@ function drawBackground() {
     const startX = Math.floor((cameraX - canvas.width / 2) / SCALED_TILE) * SCALED_TILE;
     const startY = Math.floor((cameraY - canvas.height / 2) / SCALED_TILE) * SCALED_TILE;
 
-    if (currentBiome) {
+    if (currentBiome && currentBiome.id !== 'plains') {
         // Biome rendering with sprite sheets
         const biomeImg = images[`biome_${currentBiome.id}`];
         const terrainTypes = ['liquid', 'ground', 'main', 'rock', 'high'];
