@@ -1098,6 +1098,8 @@ function damagePlayer() {
         SFX.gameOver();
         stopMusic();
         gameState = 'gameover';
+        levelDeaths[currentLevel] = (levelDeaths[currentLevel] || 0) + 1;
+        try { localStorage.setItem('mobholdLevelDeaths', JSON.stringify(levelDeaths)); } catch (e) {}
         if (score > highScore) {
             highScore = score;
             try { localStorage.setItem('survivalHighScore', Math.floor(highScore).toString()); } catch (e) {}
@@ -1539,6 +1541,7 @@ let levelFailed = false;
 let levelTransitionTimer = 0;
 let levelStarsEarned = 0;
 let levelHighScores = {};          // { levelId: { score, stars } }
+let levelDeaths = {};              // { levelNum: deathCount }
 let maxLevelReached = 1;           // highest level unlocked
 let objectiveProgress = 0;         // current progress toward objective
 let objectiveTarget = 0;           // target for objective
@@ -1746,6 +1749,10 @@ async function loadGameData() {
         if (savedMaxLevel) {
             maxLevelReached = parseInt(savedMaxLevel, 10) || 1;
         }
+        const savedLevelDeaths = localStorage.getItem('mobholdLevelDeaths');
+        if (savedLevelDeaths) {
+            levelDeaths = JSON.parse(savedLevelDeaths);
+        }
     } catch (error) {
         // localStorage not available
     }
@@ -1858,6 +1865,8 @@ canvas.addEventListener('mousemove', (e) => {
     } else if (gameState === 'gameover') {
         const buttons = getGameOverButtonBounds();
         if (isPointInButton(x, y, buttons.restart)) {
+            isOverButton = true;
+        } else if (buttons.skip && isPointInButton(x, y, buttons.skip)) {
             isOverButton = true;
         }
     } else if (gameState === 'upgrading') {
@@ -2112,6 +2121,19 @@ function handleInputAt(screenX, screenY) {
         // Check restart button
         if (screenX >= buttons.restart.x && screenX <= buttons.restart.x + buttons.restart.width &&
             screenY >= buttons.restart.y && screenY <= buttons.restart.y + buttons.restart.height) {
+            restartGame();
+            startLevel(maxLevelReached);
+            return;
+        }
+
+        // Check skip button
+        if (buttons.skip && screenX >= buttons.skip.x && screenX <= buttons.skip.x + buttons.skip.width &&
+            screenY >= buttons.skip.y && screenY <= buttons.skip.y + buttons.skip.height) {
+            // TODO: show rewarded ad, then on completion:
+            if (currentLevel >= maxLevelReached) {
+                maxLevelReached = currentLevel + 1;
+                try { localStorage.setItem('mobholdMaxLevel', maxLevelReached.toString()); } catch (e) {}
+            }
             restartGame();
             startLevel(maxLevelReached);
             return;
@@ -2471,19 +2493,19 @@ function getBiomeTileAt(tileX, tileY, biome) {
     if (n < th.water) {
         const isLava = biome.id === 'volcanic';
         const isSwamp = biome.id === 'swamp';
-        tile = { type: 'liquid', color: biome.palette.water, blocking: true, damage: isLava ? 2 : 0, slow: isSwamp ? 0.5 : 1 };
+        tile = { type: 'liquid', color: biome.palette.water, blocking: false, damage: isLava ? 2 : 0, slow: isSwamp ? 0.5 : 1 };
     } else if (n < th.ground) {
         tile = { type: 'ground', color: biome.palette.deep, blocking: false };
     } else if (n < th.grass) {
         tile = { type: 'main', color: biome.palette.ground, blocking: false };
     } else if (n < th.rock) {
-        tile = { type: 'rock', color: biome.palette.rock, blocking: true };
+        tile = { type: 'rock', color: biome.palette.rock, blocking: false };
     } else {
         tile = { type: 'high', color: biome.palette.light, blocking: false };
     }
 
     // Grid-based decoration placement for even distribution
-    if (!tile.blocking && !inSafe) {
+    if (!inSafe) {
         const cellSize = 5; // decorations every ~5 tiles
         const cellX = Math.floor(tileX / cellSize);
         const cellY = Math.floor(tileY / cellSize);
@@ -2499,7 +2521,7 @@ function getBiomeTileAt(tileX, tileY, biome) {
         if (dist < 1.6) {
             const decos = biome.decorations;
             const pick = Math.abs(cellX * 7 + cellY * 13 + cellX * cellY) % decos.length;
-            tile = Object.assign({}, tile, { decoration: decos[pick], blocking: decos[pick].blocking });
+            tile = Object.assign({}, tile, { decoration: decos[pick] });
         }
     }
 
@@ -4764,17 +4786,31 @@ function drawUI() {
 }
 
 function getGameOverButtonBounds() {
-    const restartWidth = 200;
-    const restartHeight = 50;
+    const btnWidth = 200;
+    const btnHeight = 50;
+    const gap = 15;
 
-    return {
+    const restartY = canvas.height / 2 - 30;
+    const result = {
         restart: {
-            x: (canvas.width - restartWidth) / 2,
-            y: canvas.height / 2 - 30,
-            width: restartWidth,
-            height: restartHeight
+            x: (canvas.width - btnWidth) / 2,
+            y: restartY,
+            width: btnWidth,
+            height: btnHeight
         }
     };
+
+    const deaths = levelDeaths[currentLevel] || 0;
+    if (deaths >= 3) {
+        result.skip = {
+            x: (canvas.width - btnWidth) / 2,
+            y: restartY + btnHeight + gap,
+            width: btnWidth,
+            height: btnHeight
+        };
+    }
+
+    return result;
 }
 
 function drawGameOver() {
@@ -4810,6 +4846,22 @@ function drawGameOver() {
     ctx.fillStyle = 'white';
     ctx.font = '14px "Press Start 2P", monospace';
     ctx.fillText('RESTART', canvas.width / 2, buttons.restart.y + buttons.restart.height / 2);
+
+    if (buttons.skip) {
+        ctx.fillStyle = '#3a5a8a';
+        ctx.fillRect(buttons.skip.x, buttons.skip.y, buttons.skip.width, buttons.skip.height);
+        ctx.strokeStyle = '#5a8acc';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(buttons.skip.x, buttons.skip.y, buttons.skip.width, buttons.skip.height);
+
+        ctx.fillStyle = 'white';
+        ctx.font = '12px "Press Start 2P", monospace';
+        ctx.fillText('SKIP LEVEL', canvas.width / 2, buttons.skip.y + buttons.skip.height / 2 - 4);
+
+        ctx.fillStyle = '#aaccff';
+        ctx.font = '9px "Press Start 2P", monospace';
+        ctx.fillText('\u25B6 WATCH AD', canvas.width / 2, buttons.skip.y + buttons.skip.height / 2 + 14);
+    }
 }
 
 function getPauseMenuButtonBounds() {
@@ -5253,6 +5305,8 @@ function updateEnemies(dt) {
                 SFX.gameOver();
                 stopMusic();
                 gameState = 'gameover';
+                levelDeaths[currentLevel] = (levelDeaths[currentLevel] || 0) + 1;
+                try { localStorage.setItem('mobholdLevelDeaths', JSON.stringify(levelDeaths)); } catch (e) {}
                 // Save high score if current score is higher
                 if (score > highScore) {
                     highScore = score;
