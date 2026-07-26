@@ -5725,14 +5725,16 @@ function getCurrentSpawnPhase() {
     // If in a level, use level-based enemy spawning with weight inversely proportional to health
     if (levelData && !levelComplete && !levelFailed) {
         const levelProgress = Math.min(1, currentLevel / 150); // 0 at start, 1 at level 150+
-        const maxHP = 180; // Cyclopse2 health
+        const maxHP = 90; // Cyclopse2 health (halved)
+        const rarePenalty = { 'Eye': 0.54, 'Beast': 0.54, 'Eye2': 0.54, 'Beast2': 0.54, 'Reptile': 0.54, 'Cyclopse': 0.54, 'Cyclopse2': 0.54 };
         const enemyWeights = {};
         for (const type of levelData.enemyTypes) {
             const monsterData = monstersData.find(m => m.type === type);
             if (monsterData) {
-                // Stronger enemies rarer early, approach equal weight later
                 const healthRatio = monsterData.health / maxHP;
-                enemyWeights[type] = 1 / (1 + healthRatio * 3 * (1 - levelProgress));
+                let w = 1 / (1 + healthRatio * 3 * (1 - levelProgress));
+                if (rarePenalty[type]) w *= rarePenalty[type];
+                enemyWeights[type] = w;
             } else {
                 enemyWeights[type] = 1.0;
             }
