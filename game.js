@@ -164,6 +164,18 @@ const SCROLL_CONFIG = {
     ScrollIce: { minInterval: 6000, maxInterval: 12000, freezeDuration: 2000, effectFrames: 10, frameWidth: 48, desc: ['Freeze 2s', 'nearest enemy'] }
 };
 
+// Biome sprite sheet decoration index mapping (row in sprite sheet = index + 1)
+const BIOME_DECO_MAP = {
+    forest: ['tree_oak','tree_pine','bush_large','fern','flower_wild','mushroom_group','stump_mossy','fallen_log'],
+    desert: ['cactus_tall','cactus_saguaro','dune_ripple','skull_buried','dead_bush','rock_sandstone','bone_pile','scorpion_hole'],
+    snow: ['pine_snow','pine_small','ice_crystal','snowdrift','frozen_lake','rock_icy','igloo_ruin','wolf_tracks'],
+    swamp: ['mushroom_glow','deadtree_twisted','lily_pad','vine_hanging','mud_bubble','frog_spawn','reeds','carnivorous_plant'],
+    volcanic: ['volcanic_rock','fire_geyser','lava_crack','obsidian_spike','skull_charred','ash_pile','magma_vent','burned_tree'],
+    crystal: ['crystal_cluster','crystal_single','gem_ruby','gem_sapphire','amethyst_column','crystal_floor','geode','glow_moss'],
+    corruption: ['corruption_tower','watcher_eye','tendril_large','void_crystal','corruption_pile','shadow_pool','spike\u8150\u8d25','whisper_orb'],
+    celestial: ['cloud_fluffy','cloud_wispy','star_pillar','light_well','floating_rock','aurora_streak','moon_shard','celestial_bloom']
+};
+
 // Monster type to folder and sprite file mapping
 const MONSTER_SPRITE_MAP = {
     'SpiderYellow': { folder: 'SpiderYellow', file: 'SpriteSheet.png' },
@@ -558,10 +570,7 @@ function registerKill(x, y, enemyType) {
     // Screen flash intensity
     comboFlashAlpha = Math.min(0.3, comboCount * 0.04);
 
-    // Trigger hitstop on kills (longer for higher combos)
-    if (comboCount >= 3) {
-        triggerHitstop(Math.min(60, 20 + comboCount * 5));
-    }
+    // Hitstop removed
 
     // Level tracking
     levelKills++;
@@ -607,8 +616,7 @@ function triggerShake(intensity, duration) {
 }
 
 function triggerHitstop(frames) {
-    hitstopTimer = Math.max(hitstopTimer, frames / 60);
-    hitstopActive = true;
+    // Disabled - no more freeze frames
 }
 
 function triggerCameraPunch(amount) {
@@ -717,7 +725,6 @@ function applyLootEffect(typeKey) {
             }
             SFX.bombExplode();
             triggerShake(15, 0.5);
-            triggerHitstop(0.15);
             break;
     }
 }
@@ -870,7 +877,6 @@ function spawnBoss() {
 
     // Big entrance shake
     triggerShake(12, 0.5);
-    triggerHitstop(0.2);
 }
 
 function updateBoss(dt) {
@@ -1773,7 +1779,16 @@ function loadImages(callback) {
         { name: 'Flame', src: 'images/flame.png' },
         // Heart icons for lives system
         { name: 'Heart_full', src: 'images/Heart_full.png' },
-        { name: 'Heart_empty', src: 'images/Heart_empty.png' }
+        { name: 'Heart_empty', src: 'images/Heart_empty.png' },
+        // Biome sprite sheets
+        { name: 'biome_forest', src: 'images/biomes/forest.png' },
+        { name: 'biome_desert', src: 'images/biomes/desert.png' },
+        { name: 'biome_snow', src: 'images/biomes/snow.png' },
+        { name: 'biome_swamp', src: 'images/biomes/swamp.png' },
+        { name: 'biome_volcanic', src: 'images/biomes/volcanic.png' },
+        { name: 'biome_crystal', src: 'images/biomes/crystal.png' },
+        { name: 'biome_corruption', src: 'images/biomes/corruption.png' },
+        { name: 'biome_celestial', src: 'images/biomes/celestial.png' }
     ];
 
     // Add monster images based on monsters.json
@@ -2421,7 +2436,6 @@ function getBiomeTileAt(tileX, tileY, biome) {
     if (tileMap.has(key)) return tileMap.get(key);
 
     const n = fbm(tileX, tileY, biome.id.charCodeAt(0) * 100, biome.noise.octaves, biome.noise.persistence, biome.noise.scale);
-    const d = fbm(tileX, tileY, biome.id.charCodeAt(0) * 200 + 50000, biome.decorNoise.octaves, biome.decorNoise.persistence, biome.decorNoise.scale);
     const inSafe = Math.abs(tileX) <= 4 && Math.abs(tileY) <= 4;
 
     const th = biome.thresholds;
@@ -2440,10 +2454,25 @@ function getBiomeTileAt(tileX, tileY, biome) {
         tile = { type: 'high', color: biome.palette.light, blocking: false };
     }
 
-    if (!tile.blocking && !inSafe && d > 0.80) {
-        const decos = biome.decorations;
-        const pick = Math.floor(d * 10000) % decos.length;
-        tile = Object.assign({}, tile, { decoration: decos[pick], blocking: decos[pick].blocking });
+    // Grid-based decoration placement for even distribution
+    if (!tile.blocking && !inSafe) {
+        const cellSize = 5; // decorations every ~5 tiles
+        const cellX = Math.floor(tileX / cellSize);
+        const cellY = Math.floor(tileY / cellSize);
+        // Deterministic jitter per cell (0..1 within cell)
+        const jitterX = (Math.sin(cellX * 127.1 + cellY * 311.7) * 43758.5453) % 1;
+        const jX = jitterX - Math.floor(jitterX); // 0..1
+        const jitterY = (Math.sin(cellX * 269.5 + cellY * 183.3) * 43758.5453) % 1;
+        const jY = jitterY - Math.floor(jitterY);
+        // Center of cell + jitter
+        const decX = cellX * cellSize + cellSize * 0.5 + (jX - 0.5) * cellSize * 0.7;
+        const decY = cellY * cellSize + cellSize * 0.5 + (jY - 0.5) * cellSize * 0.7;
+        const dist = Math.sqrt((tileX - decX) ** 2 + (tileY - decY) ** 2);
+        if (dist < 1.6) {
+            const decos = biome.decorations;
+            const pick = Math.abs(cellX * 7 + cellY * 13 + cellX * cellY) % decos.length;
+            tile = Object.assign({}, tile, { decoration: decos[pick], blocking: decos[pick].blocking });
+        }
     }
 
     tileMap.set(key, tile);
@@ -3764,7 +3793,11 @@ function drawBackground() {
     const startY = Math.floor((cameraY - canvas.height / 2) / SCALED_TILE) * SCALED_TILE;
 
     if (currentBiome) {
-        // Biome rendering
+        // Biome rendering with sprite sheets
+        const biomeImg = images[`biome_${currentBiome.id}`];
+        const terrainTypes = ['liquid', 'ground', 'main', 'rock', 'high'];
+        const decoNames = BIOME_DECO_MAP[currentBiome.id] || [];
+
         for (let y = startY; y < cameraY + canvas.height / 2 + SCALED_TILE; y += SCALED_TILE) {
             for (let x = startX; x < cameraX + canvas.width / 2 + SCALED_TILE; x += SCALED_TILE) {
                 const screenX = Math.round(x - cameraX + canvas.width / 2);
@@ -3772,8 +3805,16 @@ function drawBackground() {
                 const tile = worldToTile(x, y);
                 const tileData = getBiomeTileAt(tile.x, tile.y, currentBiome);
 
-                ctx.fillStyle = tileData.color;
-                ctx.fillRect(screenX, screenY, SCALED_TILE, SCALED_TILE);
+                // Draw terrain tile from sprite sheet (row 0, column = terrain type index)
+                if (biomeImg && biomeImg.complete && biomeImg.naturalWidth > 0) {
+                    const terrainIdx = terrainTypes.indexOf(tileData.type);
+                    const srcX = (terrainIdx >= 0 ? terrainIdx : 2) * 16;
+                    ctx.drawImage(biomeImg, srcX, 0, 16, 16, screenX, screenY, SCALED_TILE, SCALED_TILE);
+                } else {
+                    // Fallback: flat color
+                    ctx.fillStyle = tileData.color;
+                    ctx.fillRect(screenX, screenY, SCALED_TILE, SCALED_TILE);
+                }
 
                 // Terrain variation with subtle noise
                 const vp = perlinNoise(screenX * 0.06, screenY * 0.06, currentBiome.id.charCodeAt(0) * 7);
@@ -3814,7 +3855,6 @@ function drawBackground() {
                 }
 
                 if (tileData.blocking && tileData.type === 'rock') {
-                    // Rock shading — 3D look
                     ctx.fillStyle = 'rgba(255,255,255,0.08)';
                     ctx.fillRect(screenX + 2, screenY + 2, SCALED_TILE - 4, SCALED_TILE * 0.3);
                     ctx.fillStyle = 'rgba(0,0,0,0.15)';
@@ -3825,7 +3865,17 @@ function drawBackground() {
                 }
 
                 if (tileData.decoration) {
-                    drawDecoration(screenX, screenY, SCALED_TILE, tileData.decoration, frameTimestamp);
+                    // Draw decoration from sprite sheet
+                    if (biomeImg && biomeImg.complete && biomeImg.naturalWidth > 0) {
+                        const decoIdx = decoNames.indexOf(tileData.decoration.type);
+                        if (decoIdx >= 0) {
+                            ctx.drawImage(biomeImg, 0, (decoIdx + 1) * 16, 16, 16, screenX, screenY, SCALED_TILE, SCALED_TILE);
+                        } else {
+                            drawDecoration(screenX, screenY, SCALED_TILE, tileData.decoration, frameTimestamp);
+                        }
+                    } else {
+                        drawDecoration(screenX, screenY, SCALED_TILE, tileData.decoration, frameTimestamp);
+                    }
                 }
             }
         }
@@ -4183,11 +4233,11 @@ function drawBlood() {
 }
 
 function drawPointsStatusBar() {
-    const maxBarWidth = 400;
-    const barWidth = Math.min(maxBarWidth, canvas.width - 40); // 20px padding on each side
-    const barHeight = 30;
+    const maxBarWidth = Math.min(550, canvas.width * 0.65);
+    const barWidth = Math.max(200, Math.min(maxBarWidth, canvas.width - 40));
+    const barHeight = 38;
     const barX = (canvas.width - barWidth) / 2;
-    const barY = 10;
+    const barY = 8;
 
     // Calculate progress toward next threshold
     let progress = 1;
@@ -4202,22 +4252,29 @@ function drawPointsStatusBar() {
         displayText = `${Math.floor(score)} / ${nextThreshold}`;
     }
 
-    // Draw background
-    ctx.fillStyle = '#333';
-    ctx.fillRect(barX, barY, barWidth, barHeight);
+    // Draw background with rounded corners
+    ctx.fillStyle = 'rgba(30, 30, 30, 0.85)';
+    roundRect(barX, barY, barWidth, barHeight, 6);
+    ctx.fill();
 
     // Draw progress fill
     ctx.fillStyle = '#c44a4a';
+    ctx.save();
+    ctx.beginPath();
+    roundRect(barX, barY, barWidth, barHeight, 6);
+    ctx.clip();
     ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+    ctx.restore();
 
     // Draw border
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(barX, barY, barWidth, barHeight);
+    roundRect(barX, barY, barWidth, barHeight, 6);
+    ctx.stroke();
 
     // Draw text centered in bar
     ctx.fillStyle = 'white';
-    ctx.font = '12px "Press Start 2P", monospace';
+    ctx.font = 'bold 14px "Press Start 2P", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(displayText, barX + barWidth / 2, barY + barHeight / 2);
@@ -4377,9 +4434,9 @@ function drawLivesUI() {
 
     const heartSize = 64;
     const spacing = 0;
-    const statusBarY = 10;
-    const statusBarHeight = 30;
-    const startY = statusBarY + statusBarHeight + 10; // Below XP status bar
+    const statusBarY = 8;
+    const statusBarHeight = 38;
+    const startY = statusBarY + statusBarHeight + 8;
     const totalWidth = MAX_LIVES * heartSize + (MAX_LIVES - 1) * spacing;
     const startX = (canvas.width - totalWidth) / 2; // Centered
 
@@ -4540,13 +4597,13 @@ function drawBiomeName() {
 function drawLevelHUD() {
     if (!levelData) return;
 
-    // === Responsive sizing ===
-    const objFontSize = Math.min(12, canvas.width * 0.016);
-    const modFontSize = Math.min(9, canvas.width * 0.011);
-    const pad = Math.min(10, canvas.width * 0.012);
-    const badgePadX = Math.min(10, canvas.width * 0.012);
-    const badgePadY = Math.min(5, canvas.height * 0.006);
-    const br = Math.min(4, canvas.width * 0.005);
+    // === Responsive sizing (enlarged) ===
+    const objFontSize = Math.min(18, canvas.width * 0.024);
+    const modFontSize = Math.min(13, canvas.width * 0.017);
+    const pad = Math.min(16, canvas.width * 0.02);
+    const badgePadX = Math.min(18, canvas.width * 0.022);
+    const badgePadY = Math.min(10, canvas.height * 0.012);
+    const br = Math.min(6, canvas.width * 0.008);
 
     // === LVL + OBJECTIVE — bottom-center ===
     const lvlText = `LVL ${currentLevel}`;
@@ -4556,9 +4613,13 @@ function drawLevelHUD() {
     const comboW = ctx.measureText(comboText).width;
     const comboY = canvas.height - SAFE_BOTTOM - objFontSize - badgePadY * 2 - pad;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     roundRect((canvas.width - comboW) / 2 - badgePadX, comboY - badgePadY, comboW + badgePadX * 2, objFontSize + badgePadY * 2, br);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    roundRect((canvas.width - comboW) / 2 - badgePadX, comboY - badgePadY, comboW + badgePadX * 2, objFontSize + badgePadY * 2, br);
+    ctx.stroke();
     ctx.fillStyle = '#ffcc00';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -4581,9 +4642,13 @@ function drawLevelHUD() {
         const modX = (canvas.width - modW) / 2;
         const modY = comboY - modFontSize - badgePadY * 2;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         roundRect(modX - badgePadX, modY - badgePadY, modW + badgePadX * 2, modFontSize + badgePadY * 2, br);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 100, 50, 0.4)';
+        ctx.lineWidth = 1;
+        roundRect(modX - badgePadX, modY - badgePadY, modW + badgePadX * 2, modFontSize + badgePadY * 2, br);
+        ctx.stroke();
         ctx.fillStyle = '#ff6633';
         ctx.fillText(modTexts, modX, modY);
     }
